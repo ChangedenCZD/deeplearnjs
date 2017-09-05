@@ -20,7 +20,6 @@ rm -rf "$TMP_DIR"
 mkdir "$TMP_DIR"
 
 cp -r "docs" "$TMP_DIR/"
-cp "README.md" "$TMP_DIR/"
 
 # Make the documentation.
 ./node_modules/.bin/typedoc --out "$TMP_DIR/docs/api/" --excludeExternals \
@@ -37,9 +36,15 @@ cp -r "demos" "$TMP_DIR/"
 ./scripts/deploy-demo demos/benchmarks/math-benchmark.ts \
     demos/benchmarks/benchmark-demo.html $TMP_DIR/demos/benchmarks
 
+./scripts/deploy-demo demos/intro/intro.ts \
+    demos/intro/index.html $TMP_DIR/demos/intro
+./scripts/deploy-demo demos/ml_beginners/ml_beginners.ts \
+    demos/ml_beginners/index.html $TMP_DIR/demos/ml_beginners
+
 # Build the homepage (no deploy since homepage is not polymer).
 ./scripts/build-demo demos/homepage/index.ts
 cp -r demos/homepage/* "$TMP_DIR"
+cp "README.md" "$TMP_DIR/_includes/"
 rm "$TMP_DIR"/index.ts
 
 git stash

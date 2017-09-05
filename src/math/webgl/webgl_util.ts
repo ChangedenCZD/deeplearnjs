@@ -14,8 +14,8 @@ limitations under the License.
 ==============================================================================*/
 
 let USE_WEBGL2_WHEN_AVAILABLE = true;
-let WEBGL2_ENABLED: boolean|undefined = null!;
-let MAX_TEXTURE_SIZE: number = null!;
+let WEBGL2_ENABLED: boolean|undefined = null;
+let MAX_TEXTURE_SIZE: number = null;
 
 import * as util from '../../util';
 
@@ -221,7 +221,7 @@ export function queryMaxTextureSize(gl: WebGLRenderingContext): number {
     return MAX_TEXTURE_SIZE;
   }
   MAX_TEXTURE_SIZE =
-      callAndCheck(gl, () => gl!.getParameter(gl!.MAX_TEXTURE_SIZE));
+      callAndCheck(gl, () => gl.getParameter(gl.MAX_TEXTURE_SIZE));
   return MAX_TEXTURE_SIZE;
 }
 
@@ -379,10 +379,10 @@ function validateTextureUnit(gl: WebGLRenderingContext, textureUnit: number) {
 }
 
 export function getTextureShapeFromLogicalShape(
-    gl: WebGLRenderingContext, logicalShape: number[],
+    gl: WebGLRenderingContext, logShape: number[],
     preferredTexShape?: [number, number]): [number, number] {
   const maxTexSize = queryMaxTextureSize(gl);
-  const size = util.sizeFromShape(logicalShape);
+  const size = util.sizeFromShape(logShape);
   if (preferredTexShape != null) {
     const sizePreferred = util.sizeFromShape(preferredTexShape);
     util.assert(
@@ -395,16 +395,20 @@ export function getTextureShapeFromLogicalShape(
     }
   }
 
-  if (logicalShape.length <= 1 && size <= maxTexSize) {
+  if (logShape.length <= 1 && size <= maxTexSize) {
     return [size, 1];
   } else if (
-      logicalShape.length === 2 && logicalShape[0] <= maxTexSize &&
-      logicalShape[1] <= maxTexSize) {
-    return logicalShape as [number, number];
+      logShape.length === 2 && logShape[0] <= maxTexSize &&
+      logShape[1] <= maxTexSize) {
+    return logShape as [number, number];
   } else if (
-      logicalShape.length === 3 && logicalShape[0] <= maxTexSize &&
-      logicalShape[1] * logicalShape[2] <= maxTexSize) {
-    return [logicalShape[0], logicalShape[1] * logicalShape[2]];
+      logShape.length === 3 && logShape[0] <= maxTexSize &&
+      logShape[1] * logShape[2] <= maxTexSize) {
+    return [logShape[0], logShape[1] * logShape[2]];
+  } else if (
+      logShape.length === 4 && logShape[0] <= maxTexSize &&
+      logShape[1] * logShape[2] * logShape[3] <= maxTexSize) {
+    return [logShape[0], logShape[1] * logShape[2] * logShape[3]];
   } else {
     return util.sizeToSquarishShape(size);
   }

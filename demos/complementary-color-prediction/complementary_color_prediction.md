@@ -1,4 +1,9 @@
-# Predicting Complementary Colors with deeplearn.js
+---
+layout: page
+order: 5
+---
+
+# Example: Predicting Complementary Colors
 
 This tutorial takes the reader through coding a model that predicts the [complements of colors](https://en.wikipedia.org/wiki/Complementary_colors). The hyper-parameters of this model may not be perfectly optimized, but building the model will take us through important concepts of deeplearn.js. Indeed, adding more layers seems to yield closer predictions of complement colors. We did not spend significant time optimizing hyper-parameters - we would love a pull request towards that end.
 
@@ -192,7 +197,7 @@ We also add a cost tensor that specifies the loss function (mean squared).
 
 ```ts
 this.costTensor =
-    graph.meanSquaredCost(this.predictionTensor, this.targetTensor);
+    graph.meanSquaredCost(this.targetTensor, this.predictionTensor);
 ```
 
 Finally, we create a session for running training and inference.

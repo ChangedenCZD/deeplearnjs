@@ -245,8 +245,8 @@ describe('NDArrayMathCPU matMul', () => {
   });
 
   it('A x B^t shapes do not match', () => {
-    const a = NDArray.zeros<Array2D>([2, 3]);
-    const b = NDArray.zeros<Array2D>([3, 2]);
+    const a = Array2D.zeros([2, 3]);
+    const b = Array2D.zeros([3, 2]);
     const f = () => {
       math.matMul(
           a, b, MatrixOrientation.REGULAR, MatrixOrientation.TRANSPOSED);
@@ -255,8 +255,8 @@ describe('NDArrayMathCPU matMul', () => {
   });
 
   it('A^t x B shapes do not match', () => {
-    const a = NDArray.zeros<Array2D>([2, 3]);
-    const b = NDArray.zeros<Array2D>([3, 2]);
+    const a = Array2D.zeros([2, 3]);
+    const b = Array2D.zeros([3, 2]);
     const f = () => {
       math.matMul(
           a, b, MatrixOrientation.TRANSPOSED, MatrixOrientation.REGULAR);
@@ -265,8 +265,8 @@ describe('NDArrayMathCPU matMul', () => {
   });
 
   it('A^t x B^t shapes do not match', () => {
-    const a = NDArray.zeros<Array2D>([3, 2]);
-    const b = NDArray.zeros<Array2D>([3, 2]);
+    const a = Array2D.zeros([3, 2]);
+    const b = Array2D.zeros([3, 2]);
     const f = () => {
       math.matMul(
           a, b, MatrixOrientation.TRANSPOSED, MatrixOrientation.TRANSPOSED);
@@ -396,14 +396,13 @@ describe('NDArrayMathCPU element-wise mul/div', () => {
     let a = Array2D.new([2, 2], [1, 2, 3, 4]);
     let b = Array2D.new([2, 2], [5, 4, 3, 2]);
     let expected = Array2D.new([2, 2], [5, 8, 9, 8]);
-    expect(expected.equals(math.elementWiseMulBroadcast(a, b))).toBe(true);
+    expect(expected.equals(math.multiply(a, b))).toBe(true);
 
     // Broadcast a over b.
-    a = Array2D.new([2, 2], [1, 2, 3, 4]);
-    b = Array2D.new([4, 4], [2, 3, 4, 5, 3, 4, 5, 6, 4, 5, 6, 7, 5, 6, 7, 8]);
-    expected = Array2D.new(
-        [4, 4], [2, 6, 4, 10, 9, 16, 15, 24, 4, 10, 6, 14, 15, 24, 21, 32]);
-    expect(expected.equals(math.elementWiseMulBroadcast(a, b))).toBe(true);
+    a = Array2D.new([1, 2], [1, 2]);
+    b = Array2D.new([4, 2], [2, 3, 4, 5, 6, 7, 8, 9]);
+    expected = Array2D.new([4, 2], [2, 6, 4, 10, 6, 14, 8, 18]);
+    expect(expected.equals(math.multiply(a, b))).toBe(true);
   });
 
   it('multiplication, no broadcasting', () => {
@@ -751,6 +750,25 @@ describe('NDArrayMathCPU log/exp', () => {
     const a = Array1D.new([1, 2, NaN]);
     const result = math.logSumExp(a);
     expect(result.get()).toEqual(NaN);
+  });
+});
+
+describe('NDArrayMathCPU sqrt', () => {
+  let math: NDArrayMathCPU;
+  beforeEach(() => {
+    math = new NDArrayMathCPU();
+  });
+
+  it('sqrt', () => {
+    const r = math.sqrt(Array1D.new([2, 4]));
+
+    expect(r.get(0)).toBeCloseTo(Math.sqrt(2));
+    expect(r.get(1)).toBeCloseTo(Math.sqrt(4));
+  });
+
+  it('sqrt propagates NaNs', () => {
+    const r = math.sqrt(Array1D.new([1, NaN])).getValues();
+    expect(r).toEqual(new Float32Array([Math.sqrt(1), NaN]));
   });
 });
 

@@ -27,7 +27,7 @@ describe('NDArrayMathGPU scope', () => {
     math = new NDArrayMathGPU();
   });
 
-  it('basic scope usage with a return', () => {
+  it('scope returns NDArray', () => {
     const a = Array1D.new([1, 2, 3]);
     let b = Array1D.new([0, 0, 0]);
 
@@ -35,9 +35,9 @@ describe('NDArrayMathGPU scope', () => {
 
     math.scope(() => {
       const result = math.scope(() => {
-        b = math.add(a, b);
-        b = math.add(a, b);
-        b = math.add(a, b);
+        b = math.add(a, b) as Array1D;
+        b = math.add(a, b) as Array1D;
+        b = math.add(a, b) as Array1D;
         return math.add(a, b);
       });
 
@@ -55,6 +55,33 @@ describe('NDArrayMathGPU scope', () => {
     b.dispose();
   });
 
+  it('scope returns NDArray[]', () => {
+    const a = Array1D.new([1, 2, 3]);
+    const b = Array1D.new([0, -1, 1]);
+
+    const numUsedTexturesBefore = math.getTextureManager().getNumUsedTextures();
+
+    math.scope(() => {
+      const result = math.scope(() => {
+        math.add(a, b);
+        return [math.add(a, b), math.sub(a, b)];
+      });
+
+      // a, b, and 2 results are new textures. All intermediates should be
+      // disposed.
+      expect(math.getTextureManager().getNumUsedTextures())
+          .toEqual(numUsedTexturesBefore + 4);
+      expect(result[0].getValues()).toEqual(new Float32Array([1, 1, 4]));
+      expect(result[1].getValues()).toEqual(new Float32Array([1, 3, 2]));
+    });
+
+    // a, b are new textures, result should be disposed.
+    expect(math.getTextureManager().getNumUsedTextures())
+        .toEqual(numUsedTexturesBefore + 2);
+    a.dispose();
+    b.dispose();
+  });
+
   it('basic scope usage without return', () => {
     const a = Array1D.new([1, 2, 3]);
     let b = Array1D.new([0, 0, 0]);
@@ -62,9 +89,9 @@ describe('NDArrayMathGPU scope', () => {
     const numUsedTexturesBefore = math.getTextureManager().getNumUsedTextures();
 
     math.scope(() => {
-      b = math.add(a, b);
-      b = math.add(a, b);
-      b = math.add(a, b);
+      b = math.add(a, b) as Array1D;
+      b = math.add(a, b) as Array1D;
+      b = math.add(a, b) as Array1D;
       math.add(a, b);
     });
 
@@ -82,10 +109,10 @@ describe('NDArrayMathGPU scope', () => {
 
     math.scope(() => {
       const result = math.scope(() => {
-        b = math.add(a, b);
+        b = math.add(a, b) as Array1D;
         b = math.scope(() => {
           b = math.scope(() => {
-            return math.add(a, b);
+            return math.add(a, b) as Array1D;
           });
           // a, original b, and two intermediate textures should be the only
           // textures.
@@ -99,12 +126,12 @@ describe('NDArrayMathGPU scope', () => {
           expect(math.getTextureManager().getNumUsedTextures())
               .toEqual(numUsedTexturesBefore + 4);
 
-          return math.add(a, b);
+          return math.add(a, b) as Array1D;
         });
         expect(math.getTextureManager().getNumUsedTextures())
             .toEqual(numUsedTexturesBefore + 4);
 
-        return math.add(a, b);
+        return math.add(a, b) as Array1D;
       });
 
       // a, b, and result are new textures. All intermediates should be
@@ -127,7 +154,7 @@ describe('NDArrayMathGPU clone', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -157,7 +184,7 @@ describe('NDArrayMathGPU slice2D', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -208,7 +235,7 @@ describe('NDArrayMathGPU copy2D', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -266,7 +293,7 @@ describe('NDArrayMathGPU scaledNDArrayAdd', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -346,7 +373,7 @@ describe('NDArrayMathGPU concat3D', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -423,7 +450,7 @@ describe('NDArrayMathGPU matMul', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -678,7 +705,7 @@ describe('NDArrayMathGPU element-wise mul/div', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -841,7 +868,7 @@ describe('NDArrayMathGPU unary ops', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -972,7 +999,7 @@ describe('NDArrayMathGPU min/max', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1018,7 +1045,7 @@ describe('NDArrayMathGPU scalar and element-wise', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1174,7 +1201,7 @@ describe('NDArrayMathGPU scalarTimesNDArray', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1210,7 +1237,7 @@ describe('NDArrayMathGPU log/exp', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1267,6 +1294,36 @@ describe('NDArrayMathGPU log/exp', () => {
   });
 });
 
+describe('NDArrayMathGPU sqrt', () => {
+  let math: NDArrayMathGPU;
+  beforeEach(() => {
+    math = new NDArrayMathGPU();
+    math.startScope();
+  });
+
+  afterEach(() => {
+    math.endScope(null);
+    math.dispose();
+  });
+
+  it('sqrt', () => {
+    const a = Array1D.new([2, 4]);
+    const r = math.sqrt(a);
+
+    expect(r.get(0)).toBeCloseTo(Math.sqrt(2));
+    expect(r.get(1)).toBeCloseTo(Math.sqrt(4));
+
+    a.dispose();
+  });
+
+  it('sqrt propagates NaNs', () => {
+    const a = Array1D.new([1, NaN]);
+    const r = math.sqrt(a).getValues();
+    expect(r).toEqual(new Float32Array([Math.sqrt(1), NaN]));
+    a.dispose();
+  });
+});
+
 
 describe('softmax', () => {
   let math: NDArrayMathGPU;
@@ -1277,7 +1334,7 @@ describe('softmax', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1323,7 +1380,7 @@ describe('NDArrayMathGPU sum', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1350,7 +1407,7 @@ describe('NDArrayMathGPU argmax', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1377,7 +1434,7 @@ describe('NDArrayMathGPU argmin', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1405,7 +1462,7 @@ describe('NDArrayMathGPU argmax equals', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1445,7 +1502,7 @@ describe('NDArrayMathGPU conv2d', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1584,7 +1641,7 @@ describe('NDArrayMathGPU conv2dTranspose', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1708,7 +1765,7 @@ describe('NDArrayMathGPU conv2dDerWeights', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1745,7 +1802,7 @@ describe('NDArrayMathGPU conv2dDerWeights', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1773,7 +1830,7 @@ describe('NDArrayMathGPU maxPool', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1831,7 +1888,7 @@ describe('NDArrayMathGPU maxPoolBackprop', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1892,7 +1949,7 @@ describe('NDArrayMathGPU resizeBilinear', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.dispose();
   });
 
@@ -1970,7 +2027,7 @@ describe('NDArrayMathGPU batchNorm', () => {
   });
 
   afterEach(() => {
-    math.endScope(null!);
+    math.endScope(null);
     math.startScope();
   });
 
@@ -2126,5 +2183,145 @@ describe('NDArrayMathGPU batchNorm', () => {
     variance.dispose();
     scale.dispose();
     offset.dispose();
+  });
+});
+
+describe('NDArrayMathGPU debug mode', () => {
+  let math: NDArrayMathGPU;
+
+  beforeEach(() => {
+    math = new NDArrayMathGPU();
+    math.startScope();
+  });
+
+  afterEach(() => {
+    math.endScope(null);
+  });
+
+  it('debug mode does not error when no nans', () => {
+    math.enableDebugMode();
+    const a = Array1D.new([2, -1, 0, 3]);
+    const res = math.relu(a);
+    expect(res.getValues()).toEqual(new Float32Array([2, 0, 0, 3]));
+  });
+
+  it('debug mode errors when there are nans', () => {
+    math.enableDebugMode();
+    const a = Array1D.new([2, NaN]);
+    const f = () => math.relu(a);
+    expect(f).toThrowError();
+  });
+
+  it('no errors where there are nans, and debug mode is disabled', () => {
+    const a = Array1D.new([2, NaN]);
+    const res = math.relu(a);
+    expect(res.getValues()).toEqual(new Float32Array([2, NaN]));
+  });
+});
+
+describe('LSTMCell', () => {
+  let math: NDArrayMathGPU;
+  beforeEach(() => {
+    math = new NDArrayMathGPU();
+    math.startScope();
+  });
+
+  afterEach(() => {
+    math.endScope(null);
+    math.startScope();
+  });
+
+  it('Batch size must be 1 for MultiRNNCell', () => {
+    const lstmKernel1 = Array2D.zeros([3, 4]);
+    const lstmBias1 = Array1D.zeros([4]);
+    const lstmKernel2 = Array2D.zeros([2, 4]);
+    const lstmBias2 = Array1D.zeros([4]);
+
+    const forgetBias = Scalar.new(1.0);
+    const lstm1 =
+        math.basicLSTMCell.bind(math, forgetBias, lstmKernel1, lstmBias1);
+    const lstm2 =
+        math.basicLSTMCell.bind(math, forgetBias, lstmKernel2, lstmBias2);
+
+    const c = [
+      Array2D.zeros([1, lstmBias1.shape[0] / 4]),
+      Array2D.zeros([1, lstmBias2.shape[0] / 4])
+    ];
+    const h = [
+      Array2D.zeros([1, lstmBias1.shape[0] / 4]),
+      Array2D.zeros([1, lstmBias2.shape[0] / 4])
+    ];
+
+    const onehot = Array2D.zeros([2, 2]);
+    onehot.set(1.0, 1, 0);
+    const output = () => math.multiRNNCell([lstm1, lstm2], onehot, c, h);
+    expect(output).toThrowError();
+  });
+
+  it('Batch size must be 1 for basicLSTMCell', () => {
+    const lstmKernel = Array2D.zeros([3, 4]);
+    const lstmBias = Array1D.zeros([4]);
+
+    const forgetBias = Scalar.new(1.0);
+
+    const c = Array2D.zeros([1, lstmBias.shape[0] / 4]);
+    const h = Array2D.zeros([1, lstmBias.shape[0] / 4]);
+
+    const onehot = Array2D.zeros([2, 2]);
+    onehot.set(1.0, 1, 0);
+    const output = () =>
+        math.basicLSTMCell(forgetBias, lstmKernel, lstmBias, onehot, c, h);
+    expect(output).toThrowError();
+  });
+
+  it('MultiRNNCell with 2 BasicLSTMCells', () => {
+    const lstmKernel1 = Array2D.new(
+        [3, 4], new Float32Array([
+          0.26242125034332275, -0.8787832260131836, 0.781475305557251,
+          1.337337851524353, 0.6180247068405151, -0.2760246992111206,
+          -0.11299663782119751, -0.46332040429115295, -0.1765323281288147,
+          0.6807947158813477, -0.8326982855796814, 0.6732975244522095
+        ]));
+    const lstmBias1 = Array1D.new(new Float32Array(
+        [1.090713620185852, -0.8282332420349121, 0, 1.0889357328414917]));
+    const lstmKernel2 = Array2D.new(
+        [2, 4], new Float32Array([
+          -1.893059492111206, -1.0185645818710327, -0.6270437240600586,
+          -2.1829540729522705, -0.4583775997161865, -0.5454602241516113,
+          -0.3114445209503174, 0.8450229167938232
+        ]));
+    const lstmBias2 = Array1D.new(new Float32Array(
+        [0.9906240105628967, 0.6248329877853394, 0, 1.0224634408950806]));
+
+    const forgetBias = Scalar.new(1.0);
+    const lstm1 =
+        math.basicLSTMCell.bind(math, forgetBias, lstmKernel1, lstmBias1);
+    const lstm2 =
+        math.basicLSTMCell.bind(math, forgetBias, lstmKernel2, lstmBias2);
+
+    const c = [
+      Array2D.zeros([1, lstmBias1.shape[0] / 4]),
+      Array2D.zeros([1, lstmBias2.shape[0] / 4])
+    ];
+    const h = [
+      Array2D.zeros([1, lstmBias1.shape[0] / 4]),
+      Array2D.zeros([1, lstmBias2.shape[0] / 4])
+    ];
+
+    const onehot = Array2D.zeros([1, 2]);
+    onehot.set(1.0, 0, 0);
+
+    const output = math.multiRNNCell([lstm1, lstm2], onehot, c, h);
+
+    test_util.expectArraysClose(
+        output[0][0].getValues(), new Float32Array([-0.7440074682235718]),
+        1e-4);
+    test_util.expectArraysClose(
+        output[0][1].getValues(), new Float32Array([0.7460772395133972]), 1e-4);
+    test_util.expectArraysClose(
+        output[1][0].getValues(), new Float32Array([-0.5802832245826721]),
+        1e-4);
+    test_util.expectArraysClose(
+        output[1][1].getValues(), new Float32Array([0.5745711922645569]), 1e-4);
   });
 });

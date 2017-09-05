@@ -31,11 +31,6 @@ export class NDArrayMathCPU extends NDArrayMath {
         ndarray.shape, {values: new Float32Array(ndarray.getValues())});
   }
 
-  protected reshapeInternal<T1 extends NDArray, T2 extends NDArray>(
-      ndarray: T1, newShape: number[]): T2 {
-    return this.cloneInternal(ndarray).reshape<T2>(newShape);
-  }
-
   protected slice2DInternal(
       input: Array2D, beginRowCol: [number, number],
       sizeRowCol: [number, number]): Array2D {
@@ -69,7 +64,7 @@ export class NDArrayMathCPU extends NDArrayMath {
     const outputShape =
         concat3d_util.computeConcat3DOutputShape(x1.shape, x2.shape, axis);
 
-    const values = NDArray.zeros<Array3D>(outputShape);
+    const values = Array3D.zeros(outputShape);
 
     for (let i = 0; i < outputShape[0]; i++) {
       for (let j = 0; j < outputShape[1]; j++) {
@@ -93,59 +88,23 @@ export class NDArrayMathCPU extends NDArrayMath {
     return values;
   }
 
-  protected scalarPlusArrayInternal<T extends NDArray>(c: Scalar, a: T): T {
-    const resultValues = new Float32Array(a.size);
-    const aValues = a.getValues();
-    const cVal = c.get();
-    for (let i = 0; i < resultValues.length; ++i) {
-      resultValues[i] = cVal + aValues[i];
-    }
-    return NDArray.make<T>(a.shape, {values: resultValues});
-  }
-
   protected scaledArrayAddInternal<T extends NDArray>(
       c1: Scalar, a: T, c2: Scalar, b: T) {
-    const cValues = new Float32Array(a.size);
+    const newShape = util.assertAndGetBroadcastedShape(a.shape, b.shape);
+    const newValues = new Float32Array(util.sizeFromShape(newShape));
+
     const aValues = a.getValues();
     const bValues = b.getValues();
     const c1Val = c1.get();
     const c2Val = c2.get();
-    for (let i = 0; i < cValues.length; ++i) {
-      cValues[i] = c1Val * aValues[i] + c2Val * bValues[i];
+    for (let i = 0; i < newValues.length; ++i) {
+      newValues[i] = c1Val * aValues[i % a.size] + c2Val * bValues[i % b.size];
     }
-    return NDArray.make<T>(a.shape, {values: cValues});
-  }
-
-  protected scalarTimesArrayInternal<T extends NDArray>(c: Scalar, a: T): T {
-    const newValues = new Float32Array(a.size);
-    const aValues = a.getValues();
-    const cVal = c.get();
-    for (let i = 0; i < aValues.length; ++i) {
-      newValues[i] = cVal * aValues[i];
-    }
-    return NDArray.make<T>(a.shape, {values: newValues});
-  }
-
-  protected scalarMinusArrayInternal<T extends NDArray>(c: Scalar, a: T): T {
-    const negA = this.negInternal(a);
-    const result = this.scalarPlusArrayInternal(c, negA);
-
-    negA.dispose();
-
-    return result;
-  }
-
-  protected arrayMinusScalarInternal<T extends NDArray>(a: T, c: Scalar): T {
-    const negC = this.negInternal(c);
-    const result = this.scalarPlusArrayInternal(negC, a);
-
-    negC.dispose();
-
-    return result;
+    return NDArray.make<T>(newShape, {values: newValues});
   }
 
   protected negInternal<T extends NDArray>(a: T): T {
-    return this.scalarTimesArrayInternal(Scalar.NEG_ONE, a);
+    return this.scalarTimesArray(Scalar.NEG_ONE, a);
   }
 
   protected addInternal<T extends NDArray>(a: T, b: T): T {
@@ -194,61 +153,29 @@ export class NDArrayMathCPU extends NDArrayMath {
     return Array2D.new([leftDim, rightDim], values);
   }
 
-  protected elementWiseMulInternal<T extends NDArray>(a: T, b: T): T {
-    const newValues = new Float32Array(a.size);
+  protected multiplyInternal<T extends NDArray>(a: T, b: T): T {
+    const newShape = util.assertAndGetBroadcastedShape(a.shape, b.shape);
+    const newValues = new Float32Array(util.sizeFromShape(newShape));
+
     const aValues = a.getValues();
     const bValues = b.getValues();
-    for (let i = 0; i < aValues.length; ++i) {
-      newValues[i] = aValues[i] * bValues[i];
+    for (let i = 0; i < newValues.length; ++i) {
+      newValues[i] = aValues[i % a.size] * bValues[i % b.size];
     }
-    return NDArray.make<T>(a.shape, {values: newValues});
-  }
-
-  protected elementWiseMulBroadcastInternal(a: Array2D, b: Array2D): Array2D {
-    const maxRow = Math.max(a.shape[0], b.shape[0]);
-    const maxCol = Math.max(a.shape[1], b.shape[1]);
-
-    const values = new Float32Array(maxRow * maxCol);
-    let index = 0;
-    for (let row = 0; row < maxRow; row++) {
-      for (let col = 0; col < maxCol; col++) {
-        values[index++] = a.get(row % a.shape[0], col % a.shape[1]) *
-            b.get(row % b.shape[0], col % b.shape[1]);
-      }
-    }
-    return Array2D.new([maxRow, maxCol], values);
+    return NDArray.make<T>(newShape, {values: newValues});
   }
 
   protected divideInternal<T extends NDArray>(a: T, b: T): T {
-    const newValues = new Float32Array(a.size);
+    const newShape = util.assertAndGetBroadcastedShape(a.shape, b.shape);
+    const newValues = new Float32Array(util.sizeFromShape(newShape));
+
     const aValues = a.getValues();
     const bValues = b.getValues();
-    for (let i = 0; i < aValues.length; ++i) {
-      newValues[i] = aValues[i] / bValues[i];
-    }
-    return NDArray.make<T>(a.shape, {values: newValues});
-  }
 
-  protected scalarDividedByArrayInternal<T extends NDArray>(c: Scalar, a: T):
-      T {
-    const newValues = new Float32Array(a.size);
-    const aValues = a.getValues();
-    const cValue = c.get();
-    for (let i = 0; i < aValues.length; ++i) {
-      newValues[i] = cValue / aValues[i];
+    for (let i = 0; i < newValues.length; ++i) {
+      newValues[i] = aValues[i % a.size] / bValues[i % b.size];
     }
-    return NDArray.make<T>(a.shape, {values: newValues});
-  }
-
-  protected arrayDividedByScalarInternal<T extends NDArray>(a: T, c: Scalar):
-      T {
-    const newValues = new Float32Array(a.size);
-    const aValues = a.getValues();
-    const cValue = c.get();
-    for (let i = 0; i < aValues.length; ++i) {
-      newValues[i] = aValues[i] / cValue;
-    }
-    return NDArray.make<T>(a.shape, {values: newValues});
+    return NDArray.make<T>(newShape, {values: newValues});
   }
 
   protected sumInternal(ndarray: NDArray): Scalar {
@@ -367,6 +294,16 @@ export class NDArrayMathCPU extends NDArrayMath {
     for (let i = 0; i < values.length; ++i) {
       const value = values[i];
       newValues[i] = Math.log(value);
+    }
+    return NDArray.make<T>(ndarray.shape, {values: newValues});
+  }
+
+  protected sqrtInternal<T extends NDArray>(ndarray: T): T {
+    const values = ndarray.getValues();
+    const newValues = new Float32Array(values.length);
+    for (let i = 0; i < values.length; ++i) {
+      const value = values[i];
+      newValues[i] = Math.sqrt(value);
     }
     return NDArray.make<T>(ndarray.shape, {values: newValues});
   }

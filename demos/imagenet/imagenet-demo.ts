@@ -15,21 +15,23 @@ limitations under the License.
 
 import '../demo-header';
 import '../demo-footer';
+// tslint:disable-next-line:max-line-length
 import {gpgpu_util, GPGPUContext, NDArrayMathCPU, NDArrayMathGPU} from '../deeplearnjs';
 import * as imagenet_util from '../models/imagenet_util';
 import {SqueezeNet} from '../models/squeezenet';
 import {PolymerElement, PolymerHTMLElement} from '../polymer-spec';
 
 // tslint:disable-next-line:variable-name
-export const ImagenetDemoPolymer: new () => PolymerHTMLElement = PolymerElement({
-  is: 'imagenet-demo',
-  properties: {
-    layerNames: Array,
-    selectedLayerName: String,
-    inputNames: Array,
-    selectedInputName: String
-  }
-});
+export const ImagenetDemoPolymer: new () => PolymerHTMLElement =
+    PolymerElement({
+      is: 'imagenet-demo',
+      properties: {
+        layerNames: Array,
+        selectedLayerName: String,
+        inputNames: Array,
+        selectedInputName: String
+      }
+    });
 
 /**
  * NOTE: To use the webcam without SSL, use the chrome flag:
@@ -71,7 +73,7 @@ export class ImagenetDemo extends ImagenetDemoPolymer {
     this.layerNames = [];
     this.selectedLayerName = 'conv_1';
 
-    const inputDropdown = this.querySelector('#input-dropdown')!;
+    const inputDropdown = this.querySelector('#input-dropdown');
     // tslint:disable-next-line:no-any
     inputDropdown.addEventListener('iron-activate', (event: any) => {
       const selectedInputName = event.detail.selected;
@@ -85,6 +87,11 @@ export class ImagenetDemo extends ImagenetDemoPolymer {
       this.staticImgElement.src = 'images/' + event.detail.selected + '.jpg';
     });
 
+    // tslint:disable-next-line:no-any
+    const navigatorAny = navigator as any;
+    navigator.getUserMedia = navigator.getUserMedia ||
+        navigatorAny.webkitGetUserMedia || navigatorAny.mozGetUserMedia || 
+        navigatorAny.msGetUserMedia;
     if (navigator.getUserMedia) {
       navigator.getUserMedia(
           {video: true},
@@ -168,8 +175,8 @@ export class ImagenetDemo extends ImagenetDemoPolymer {
         if (!(className in topClassesToProbability)) {
           continue;
         }
-        document.getElementById('class' + count)!.innerHTML = className;
-        document.getElementById('prob' + count)!.innerHTML =
+        document.getElementById('class' + count).innerHTML = className;
+        document.getElementById('prob' + count).innerHTML =
             '' + Math.floor(1000 * topClassesToProbability[className]) / 1000;
         count++;
       }

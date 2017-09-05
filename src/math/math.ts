@@ -21,6 +21,11 @@ import {Array1D, Array2D, Array3D, Array4D, NDArray, Scalar} from './ndarray';
 
 export type ScopeResult = NDArray[]|NDArray|void;
 
+export interface LSTMCell {
+  (data: Array2D, c: Array2D, h: Array2D): [Array2D, Array2D];
+}
+
+
 export abstract class NDArrayMath {
   private ndarrayScopes: NDArray[][] = [];
   private activeScope: NDArray[];
@@ -28,9 +33,11 @@ export abstract class NDArrayMath {
   private ndarraysToKeep: NDArray[][] = [];
   private activeScopeNDArraysToKeep: NDArray[] = [];
 
+  private debugMode = false;
+
   /**
    * @param safeMode In safe mode, you must use math operations inside
-   * a math.scope() which will automatically clean up intermediate NDArrays.
+   *     a math.scope() which will automatically clean up intermediate NDArrays.
    */
   constructor(private safeMode: boolean) {}
 
@@ -57,6 +64,19 @@ export abstract class NDArrayMath {
     return result;
   }
 
+
+  /**
+   * In debug mode, the output of every math call will be downloaded to the CPU
+   * and checked for NaNs. This significantly impacts performance.
+   */
+  enableDebugMode() {
+    this.debugMode = true;
+    console.warn(
+        'Debugging mode is ON. The output of every math call will ' +
+        'be downloaded to CPU and checked for NaNs. ' +
+        'This significantly impacts performance.');
+  }
+
   /**
    * Start a scope. Use this with endScope() to achieve the same functionality
    * as scope() without the need for a function closure.
@@ -76,13 +96,14 @@ export abstract class NDArrayMath {
    * as scope() without the need for a function closure.
    */
   endScope(result: ScopeResult) {
+    let arraysToKeep = this.activeScopeNDArraysToKeep;
+    if (result != null) {
+      arraysToKeep = arraysToKeep.concat(result as NDArray | NDArray[]);
+    }
     // Dispose the current scope.
     for (let i = 0; i < this.activeScope.length; i++) {
       const ndarray = this.activeScope[i];
-
-      if (this.isNDArrayDataInList(ndarray, this.activeScopeNDArraysToKeep) ||
-          (result != null && result instanceof NDArray &&
-           ndarray.getData() === (result as NDArray).getData())) {
+      if (this.isNDArrayDataInList(ndarray, arraysToKeep)) {
         continue;
       }
       ndarray.dispose();
@@ -91,7 +112,7 @@ export abstract class NDArrayMath {
     // Pop the current scope.
     this.ndarrayScopes.pop();
     this.activeScope = this.ndarrayScopes.length === 0 ?
-        null! :
+        null :
         this.ndarrayScopes[this.ndarrayScopes.length - 1];
 
     // Track the current result in the parent scope.
@@ -109,7 +130,7 @@ export abstract class NDArrayMath {
 
     this.ndarraysToKeep.pop();
     this.activeScopeNDArraysToKeep = this.ndarraysToKeep.length === 0 ?
-        null! :
+        null :
         this.ndarraysToKeep[this.ndarraysToKeep.length - 1];
   }
 
@@ -141,12 +162,24 @@ export abstract class NDArrayMath {
     return result;
   }
 
+  private checkForNaN(arr: NDArray): void {
+    const vals = arr.getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (isNaN(vals[i])) {
+        throw Error('The result NDArray of the last math call has NaNs.');
+      }
+    }
+  }
+
   /**
    * Tracks an NDArray in the current scope to be automatically cleaned up when
    * the current scope ends, and returns the value.
    * @param result The NDArray to track in the current scope.
    */
   track<T extends NDArray>(result: T): T {
+    if (this.debugMode) {
+      this.checkForNaN(result);
+    }
     if (this.activeScope == null) {
       if (this.safeMode) {
         throw new Error(
@@ -289,22 +322,15 @@ export abstract class NDArrayMath {
   protected abstract cloneInternal<T extends NDArray>(ndarray: T): T;
 
   /**
-   * Reshapes an NDArray to a new shape. The size of the input NDArray must
-   * match the size of the requested shape.
-   * @param ndarray The input NDArray.
-   * @param newShape The new shape to reshape the NDArray to. Must be the same
-   * size as the NDArray.
+   * @deprecated Please call reshape() directly on the ndarray object.
    */
   reshape<T1 extends NDArray, T2 extends NDArray>(
       ndarray: T1, newShape: number[]): T2 {
-    util.assert(
-        ndarray.size === util.sizeFromShape(newShape),
-        `Error in reshape: old size ${ndarray.size} must match new size ` +
-            `${util.sizeFromShape(newShape)}.`);
-    return this.track(this.reshapeInternal<T1, T2>(ndarray, newShape));
+    console.warn(
+        'math.reshape() is deprecated. Please call reshape() ' +
+        'directly on the ndarray object');
+    return ndarray.reshape(newShape);
   }
-  protected abstract reshapeInternal<T1 extends NDArray, T2 extends NDArray>(
-      ndarray: T1, newShape: number[]): T2;
 
   /**
    * Extracts a slice from a matrix. The operation extraces a slice from input
@@ -531,10 +557,8 @@ export abstract class NDArrayMath {
         c.size === 1,
         `Error in scalarPlusArray: first argument must be rank 0, but got ` +
             `rank ${c.rank}.`);
-    return this.track(this.scalarPlusArrayInternal(c, a));
+    return this.add(c, a) as T;
   }
-  protected abstract scalarPlusArrayInternal<T extends NDArray>(
-      c: Scalar, a: T): T;
 
   /**
    * Computes a scalar minus NDArray, c - A.
@@ -546,25 +570,21 @@ export abstract class NDArrayMath {
         c.size === 1,
         `Error in scalarMinusArray: first argument must be rank 0, but got ` +
             `rank ${c.rank}.`);
-    return this.track(this.scalarMinusArrayInternal(c, a));
+    return this.sub(c, a) as T;
   }
-  protected abstract scalarMinusArrayInternal<T extends NDArray>(
-      c: Scalar, a: T): T;
 
   /**
-   * Computes a scalar minus NDArray, A - c.
+   * Computes A - c. A is NDArray, c is Scalar.
    * @param a The NDArray A in A - c.
-   * @param c The scalar c in A - c.
+   * @param c The Scalar c in A - c.
    */
   arrayMinusScalar<T extends NDArray>(a: T, c: Scalar): T {
     util.assert(
         c.size === 1,
         `Error in arrayMinusScalar: second argument must be rank 0, but ` +
             `got rank ${c.rank}.`);
-    return this.track(this.arrayMinusScalarInternal(a, c));
+    return this.sub(a, c) as T;
   }
-  protected abstract arrayMinusScalarInternal<T extends NDArray>(
-      a: T, c: Scalar): T;
 
   /**
    * Computes -1 * A element-wise.
@@ -576,50 +596,111 @@ export abstract class NDArrayMath {
   protected abstract negInternal<T extends NDArray>(a: T): T;
 
   /**
-   * Adds two NDArrays element-wise, A + B. Inputs must be the same shape.
+   * Adds two NDArrays element-wise, A + B. Supports broadcasting.
+   * For a stricter version without broadcasting use math.addStrict().
+   *
    * @param a The first NDArray to add element-wise.
    * @param b The second NDArray to add element-wise.
    */
-  add<T extends NDArray>(a: T, b: T): T {
-    util.assertShapesMatch(a.shape, b.shape, 'Error in add: ');
+  add(a: NDArray, b: NDArray): NDArray {
+    util.assertAndGetBroadcastedShape(a.shape, b.shape);
     return this.track(this.addInternal(a, b));
   }
-  protected abstract addInternal<T extends NDArray>(a: T, b: T): T;
+  protected abstract addInternal(a: NDArray, b: NDArray): NDArray;
 
   /**
-   * Subtracts two NDArrays element-wise, A - B. Inputs must be the same shape.
-   * @param a The first NDArray to subtract element-wise.
-   * @param b The second NDArray to subtract element-wise.
-   */
-  sub<T extends NDArray>(a: T, b: T): T {
-    util.assertShapesMatch(a.shape, b.shape, 'Error in sub: ');
-    return this.track(this.subInternal(a, b));
-  }
-  protected abstract subInternal<T extends NDArray>(a: T, b: T): T;
-
-  /**
-   * Multiplies two NDArrays element-wise (hadamard product), A * B. Inputs must
-   * be the same shape.
+   * Adds two NDArrays element-wise, A + B. Inputs must
+   * be the same shape. For broadcasting support, use math.add() instead.
+   *
    * @param a The first NDArray to multiply element-wise.
    * @param b The second NDArray to multiply element-wise.
    */
-  elementWiseMul<T extends NDArray>(a: T, b: T): T {
-    util.assertShapesMatch(a.shape, b.shape, 'Error in elementWiseMul: ');
-    return this.track(this.elementWiseMulInternal(a, b));
+  addStrict<T extends NDArray>(a: T, b: T): T {
+    util.assertShapesMatch(a.shape, b.shape, 'Error in addStrict: ');
+    return this.add(a, b) as T;
   }
-  protected abstract elementWiseMulInternal<T extends NDArray>(a: T, b: T): T;
 
   /**
-   * Divides two NDArrays element-wise (hadamard product), A / B. Inputs must be
-   * the same shape.
+   * Subtracts two NDArrays element-wise, A - B. Supports broadcasting.
+   * For a stricter version without broadcasting use math.subStrict().
+   *
+   * @param a The first NDArray to subtract element-wise.
+   * @param b The second NDArray to subtract element-wise.
+   */
+  sub(a: NDArray, b: NDArray): NDArray {
+    util.assertAndGetBroadcastedShape(a.shape, b.shape);
+    return this.track(this.subInternal(a, b));
+  }
+  protected abstract subInternal(a: NDArray, b: NDArray): NDArray;
+
+  /**
+   * Subtracts two NDArrays element-wise, A - B. Inputs must
+   * be the same shape. For broadcasting support, use math.sub() instead.
+   *
+   * @param a The first NDArray to multiply element-wise.
+   * @param b The second NDArray to multiply element-wise.
+   */
+  subStrict<T extends NDArray>(a: T, b: T): T {
+    util.assertShapesMatch(a.shape, b.shape, 'Error in subStrict: ');
+    return this.sub(a, b) as T;
+  }
+
+  /**
+   * Multiplies two NDArrays element-wise, A * B. Supports broadcasting.
+   * For a stricter version without broadcasting use math.multiplyStrict().
+   *
+   * @param a The first NDArray to multiply element-wise.
+   * @param b The second NDArray to multiply element-wise.
+   */
+  multiply(a: NDArray, b: NDArray): NDArray {
+    util.assertAndGetBroadcastedShape(a.shape, b.shape);
+    return this.track(this.multiplyInternal(a, b));
+  }
+  protected abstract multiplyInternal<T extends NDArray>(a: T, b: T): T;
+
+  /**
+   * @deprecated Use math.multiplyStrict() instead.
+   */
+  elementWiseMul<T extends NDArray>(a: T, b: T): T {
+    return this.multiplyStrict(a, b);
+  }
+
+  /**
+   * Multiplies two NDArrays element-wise, A * B. Inputs must
+   * be the same shape. For broadcasting support, use math.multiply() instead.
+   *
+   * @param a The first NDArray to multiply element-wise.
+   * @param b The second NDArray to multiply element-wise.
+   */
+  multiplyStrict<T extends NDArray>(a: T, b: T): T {
+    util.assertShapesMatch(a.shape, b.shape, 'Error in multiplyStrict: ');
+    return this.multiply(a, b) as T;
+  }
+
+  /**
+   * Divides two NDArrays element-wise, A / B. Supports broadcasting.
+   * For a stricter version without broadcasting use math.divideStrict().
+   *
    * @param a The first NDArray to divide element-wise.
    * @param b The second NDArray to divide element-wise.
    */
-  divide<T extends NDArray>(a: T, b: T): T {
-    util.assertShapesMatch(a.shape, b.shape, 'Error in divide: ');
+  divide(a: NDArray, b: NDArray): NDArray {
+    util.assertAndGetBroadcastedShape(a.shape, b.shape);
     return this.track(this.divideInternal(a, b));
   }
-  protected abstract divideInternal<T extends NDArray>(a: T, b: T): T;
+  protected abstract divideInternal(a: NDArray, b: NDArray): NDArray;
+
+  /**
+   * Divides two NDArrays element-wise, A / B. Inputs must
+   * be the same shape. For broadcasting support, use math.divide() instead.
+   *
+   * @param a The first NDArray to multiply element-wise.
+   * @param b The second NDArray to multiply element-wise.
+   */
+  divideStrict<T extends NDArray>(a: T, b: T): T {
+    util.assertShapesMatch(a.shape, b.shape, 'Error in divideStrict: ');
+    return this.divide(a, b) as T;
+  }
 
   /**
    * Computes a scalar divided by an NDArray, broadcasted over the NDArray, c /
@@ -632,10 +713,8 @@ export abstract class NDArrayMath {
         c.size === 1,
         `Error in scalarDividedByArray: first argument must be rank 0, but ` +
             `got NDArray of rank ${c.rank}.`);
-    return this.track(this.scalarDividedByArrayInternal(c, a));
+    return this.divide(c, a) as T;
   }
-  protected abstract scalarDividedByArrayInternal<T extends NDArray>(
-      c: Scalar, a: T): T;
 
   /**
    * Computes an NDArray divided by a scalar, broadcasted over the NDArray, A /
@@ -648,10 +727,8 @@ export abstract class NDArrayMath {
         c.size === 1,
         `Error in arrayDividedByScalar: second argument must be rank 0, ` +
             `but got NDArray of rank ${c.rank}.`);
-    return this.track(this.arrayDividedByScalarInternal(a, c));
+    return this.divide(a, c) as T;
   }
-  protected abstract arrayDividedByScalarInternal<T extends NDArray>(
-      a: T, c: Scalar): T;
 
   /**
    * Computes exponential of the input NDArray element-wise. y = e ^ x
@@ -670,6 +747,15 @@ export abstract class NDArrayMath {
     return this.track(this.logInternal(ndarray));
   }
   protected abstract logInternal<T extends NDArray>(ndarray: T): T;
+
+  /**
+   * Computes square root of the input NDArray element-wise. y = sqrt(x)
+   * @param ndarray The input NDArray.
+   */
+  sqrt<T extends NDArray>(ndarray: T): T {
+    return this.track(this.sqrtInternal(ndarray));
+  }
+  protected abstract sqrtInternal<T extends NDArray>(ndarray: T): T;
 
   /**
    * Computes rectified linear element-wise, max(x, 0).
@@ -751,17 +837,11 @@ export abstract class NDArrayMath {
         c.size === 1,
         `Error in arrayDividedByScalar: first argument must be rank 0, but ` +
             `got rank ${c.rank}.`);
-    return this.track(this.scalarTimesArrayInternal(c, a));
+    return this.multiply(c, a) as T;
   }
-  protected abstract scalarTimesArrayInternal<T extends NDArray>(
-      c: Scalar, a: T): T;
 
   /**
-   * Computes an element-wise broadcasted multiplication of two matrices A and
-   * B. Will return a new matrix that is the max of A and B, where the smaller
-   * matrix will broadcast over the larger matrix.
-   * @param c The scalar in the operation.
-   * @param A the NDArray in the operation that will be broadcasted over.
+   * @deprecated Use math.multiply() instead.
    */
   elementWiseMulBroadcast(a: Array2D, b: Array2D): Array2D {
     util.assert(
@@ -772,10 +852,8 @@ export abstract class NDArrayMath {
         b.rank === 2,
         `Error in elementWiseMulBroadcast: second argument must be ` +
             `rank 2, but got rank ${b.rank}.`);
-    return this.track(this.elementWiseMulBroadcastInternal(a, b));
+    return this.multiply(a, b) as Array2D;
   }
-  protected abstract elementWiseMulBroadcastInternal(a: Array2D, b: Array2D):
-      Array2D;
 
   /////////////////////
   // Convolution ops //
@@ -1041,13 +1119,13 @@ export abstract class NDArrayMath {
       util.assert(
           scale.rank === 3 || scale.rank === 1,
           `Error in batchNormalization3D: scale must be rank 3 or rank 1 ` +
-              `but got rank ${scale!.rank}.`);
+              `but got rank ${scale.rank}.`);
     }
     if (offset != null) {
       util.assert(
           offset.rank === 3 || offset.rank === 1,
           `Error in batchNormalization3D: offset must be rank 3 or rank 1 ` +
-              `but got rank ${offset!.rank}.`);
+              `but got rank ${offset.rank}.`);
     }
 
     return this.track(this.batchNormalization3DInternal(
@@ -1057,6 +1135,102 @@ export abstract class NDArrayMath {
       x: Array3D, mean: Array3D|Array1D, variance: Array3D|Array1D,
       varianceEpsilon: number, scale?: Array3D|Array1D,
       offset?: Array3D|Array1D): Array3D;
+
+  //////////////
+  // LSTM ops //
+  //////////////
+
+  /**
+   * Computes the next states and outputs of a stack of LSTMCells.
+   * Each cell output is used as input to the next cell.
+   * This is only the forward mode.
+   * Derived from tf.contrib.rn.MultiRNNCell.
+   * @param lstmCells Array of LSTMCell functions.
+   * @param data The input to the cell.
+   * @param c Array of previous cell states.
+   * @param h Array of previous cell outputs.
+   * @return Tuple [nextCellStates, cellOutputs]
+   */
+  multiRNNCell(
+      lstmCells: LSTMCell[], data: Array2D, c: Array2D[],
+      h: Array2D[]): [Array2D[], Array2D[]] {
+    util.assert(
+        data.shape[0] === 1,
+        `Error in multiRNNCell: first dimension of data is ${data.shape[0]}, ` +
+            `but batch sizes > 1 are not yet supported.`);
+    const res = this.scope(() => {
+      let input = data;
+      const newStates = [];
+      for (let i = 0; i < lstmCells.length; i++) {
+        const output = lstmCells[i](input, c[i], h[i]);
+        newStates.push(output[0]);
+        newStates.push(output[1]);
+        input = output[1];
+      }
+
+      return newStates;
+    });
+    const newC: Array2D[] = [];
+    const newH: Array2D[] = [];
+    for (let i = 0; i < res.length; i += 2) {
+      newC.push(res[i] as Array2D);
+      newH.push(res[i + 1] as Array2D);
+    }
+    return [newC, newH];
+  }
+
+  /**
+   * Computes the next state and output of a BasicLSTMCell.
+   * This is only the forward mode.
+   * Derived from tf.contrib.rnn.BasicLSTMCell.
+   * @param forgetBias Forget bias for the cell.
+   * @param lstmKernel The weights for the cell.
+   * @param lstmBias The biases for the cell.
+   * @param data The input to the cell.
+   * @param c Previous cell state.
+   * @param h Previous cell output.
+   * @return Tuple [nextCellState, cellOutput]
+   */
+  basicLSTMCell(
+      forgetBias: Scalar, lstmKernel: Array2D, lstmBias: Array1D, data: Array2D,
+      c: Array2D, h: Array2D): [Array2D, Array2D] {
+    const res = this.scope(() => {
+      util.assert(
+          data.shape[0] === 1,
+          `Error in multiRNNCell: first dimension of data is ` +
+              `${data.shape[0]}, but batch sizes > 1 are not yet supported.`);
+      // concat(inputs, h, 1)
+      // There is no concat1d, so reshape inputs and h to 3d, concat, then
+      // reshape back to 2d.
+      const data3D = data.as3D(1, 1, data.shape[1]);
+      const h3D = h.as3D(1, 1, h.shape[1]);
+      const combined3D = this.concat3D(data3D, h3D, 2);
+      const combined2D = combined3D.as2D(1, data.shape[1] + h.shape[1]);
+
+      const weighted = this.matMul(combined2D, lstmKernel);
+      const res = this.add(weighted, lstmBias) as Array2D;
+
+      // i = input_gate, j = new_input, f = forget_gate, o = output_gate
+      const i = this.slice2D(res, [0, 0], [res.shape[0], res.shape[1] / 4]);
+      const j = this.slice2D(
+          res, [0, res.shape[1] / 4 * 1], [res.shape[0], res.shape[1] / 4]);
+      const f = this.slice2D(
+          res, [0, res.shape[1] / 4 * 2], [res.shape[0], res.shape[1] / 4]);
+      const o = this.slice2D(
+          res, [0, res.shape[1] / 4 * 3], [res.shape[0], res.shape[1] / 4]);
+
+      const newC =
+          this.add(
+              this.multiplyStrict(
+                  c, this.sigmoid(this.scalarPlusArray(forgetBias, f))),
+              this.multiplyStrict(this.sigmoid(i), this.tanh(j))) as Array2D;
+      const newH =
+          this.multiplyStrict(this.tanh(newC), this.sigmoid(o)) as Array2D;
+
+      return [newC, newH];
+    });
+    return [res[0], res[1]];
+  }
 }
 
 export enum MatrixOrientation {

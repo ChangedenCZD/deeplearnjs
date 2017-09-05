@@ -72,6 +72,7 @@ export class GraphRunner {
   private lastComputedMetric: NDArray;
 
   private isInferring: boolean;
+  private lastInferTimeoutID: number;
   private currentInferenceLoopNumPasses: number|undefined;
   private inferencePassesThisRun: number;
 
@@ -178,7 +179,7 @@ export class GraphRunner {
       if (shouldComputeCost) {
         const trainTime = performance.now() - start;
 
-        this.eventObserver.avgCostCallback!(avgCost);
+        this.eventObserver.avgCostCallback(avgCost);
 
         if (this.eventObserver.trainExamplesPerSecCallback != null) {
           const examplesPerSec = (this.batchSize * 1000 / trainTime);
@@ -211,7 +212,7 @@ export class GraphRunner {
       }
 
     });
-    setTimeout(() => this.trainNetwork());
+    requestAnimationFrame(() => this.trainNetwork());
   }
 
   infer(
@@ -243,7 +244,7 @@ export class GraphRunner {
     this.currentInferenceLoopNumPasses = numPasses;
     if (!this.isInferring) {
       this.inferencePassesThisRun = 0;
-      setTimeout(() => this.inferNetwork());
+      requestAnimationFrame(() => this.inferNetwork());
     }
     this.isInferring = true;
   }
@@ -262,8 +263,8 @@ export class GraphRunner {
       for (let i = 0; i < this.inferenceExampleCount; i++) {
         // Populate a new FeedEntry[] populated with NDArrays.
         const ndarrayFeedEntries: FeedEntry[] = [];
-        for (let j = 0; j < this.inferenceFeedEntries!.length; j++) {
-          const feedEntry = this.inferenceFeedEntries![j];
+        for (let j = 0; j < this.inferenceFeedEntries.length; j++) {
+          const feedEntry = this.inferenceFeedEntries[j];
           ndarrayFeedEntries.push({
             tensor: feedEntry.tensor,
             data:
@@ -286,7 +287,7 @@ export class GraphRunner {
 
         const examplesPerSec =
             (this.inferenceExampleCount * 1000 / inferenceExamplesPerSecTime);
-        this.eventObserver.inferenceExamplesPerSecCallback!(examplesPerSec);
+        this.eventObserver.inferenceExamplesPerSecCallback(examplesPerSec);
       }
 
       if (this.eventObserver.inferenceExamplesCallback != null) {
@@ -295,11 +296,13 @@ export class GraphRunner {
       this.inferencePassesThisRun++;
 
     });
-    setTimeout(() => this.inferNetwork(), this.inferenceExampleIntervalMs);
+    this.lastInferTimeoutID = window.setTimeout(
+        () => this.inferNetwork(), this.inferenceExampleIntervalMs);
   }
 
   stopInferring() {
     this.isInferring = false;
+    window.clearTimeout(this.lastInferTimeoutID);
   }
 
   isInferenceRunning(): boolean {
@@ -314,9 +317,9 @@ export class GraphRunner {
     let metric = this.zeroScalar;
 
     return this.math.scope((keep) => {
-      for (let i = 0; i < this.metricBatchSize!; i++) {
+      for (let i = 0; i < this.metricBatchSize; i++) {
         const metricValue =
-            this.session.eval(this.metricTensor!, this.metricFeedEntries!);
+            this.session.eval(this.metricTensor, this.metricFeedEntries);
 
         metric = this.math.add(metric, metricValue);
       }

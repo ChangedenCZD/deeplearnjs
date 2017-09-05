@@ -28,8 +28,8 @@ export interface ElementWiseCostFunction {
 export class SquareCostFunc implements ElementWiseCostFunction {
   private halfOne = Scalar.new(0.5);
 
-  cost(math: NDArrayMath, x1: NDArray, x2: NDArray): NDArray {
-    const diff = math.sub(x1, x2);
+  cost<T extends NDArray>(math: NDArrayMath, x1: T, x2: T): T {
+    const diff = math.subStrict(x1, x2);
     const diffSquared = math.elementWiseMul(diff, diff);
     const result = math.scalarTimesArray(this.halfOne, diffSquared);
 
@@ -39,8 +39,8 @@ export class SquareCostFunc implements ElementWiseCostFunction {
     return result;
   }
 
-  der(math: NDArrayMath, x1: NDArray, x2: NDArray): NDArray {
-    return math.sub(x1, x2);
+  der<T extends NDArray>(math: NDArrayMath, x1: T, x2: T): T {
+    return math.subStrict(x1, x2);
   }
 
   dispose() {

@@ -22,9 +22,9 @@ import * as webgl_util from './webgl/webgl_util';
 // These global variables need to be initialized to null so that closure knows
 // not to seal them.
 /** @hidden */
-export let GPGPU: GPGPUContext = null!;
+export let GPGPU: GPGPUContext = null;
 /** @hidden */
-export let TEXTURE_MANAGER: TextureManager = null!;
+export let TEXTURE_MANAGER: TextureManager = null;
 
 /** @hidden */
 export interface NDArrayData {
@@ -55,7 +55,8 @@ export class NDArray {
 
   /**
    * Number of elements to skip in each dimension when indexing. See
-   * https://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.strides.html
+   * https://docs.scipy.org/doc/numpy/reference/generated
+   *     /numpy.ndarray.strides.html
    */
   protected strides: number[];
 
@@ -98,12 +99,13 @@ export class NDArray {
   }
 
   /** Creates a ndarray of zeros with the specified shape. */
-  static zeros<T extends NDArray>(shape: number[]): T {
+  static zeros(shape: number[]): NDArray {
     const values = new Float32Array(util.sizeFromShape(shape));
-    return NDArray.make<T>(shape, {values});
+    return NDArray.make(shape, {values});
   }
 
-  /** Creates a ndarray of zeros with the same shape as the specified ndarray.
+  /**
+   * Creates a ndarray of zeros with the same shape as the specified ndarray.
    */
   static zerosLike<T extends NDArray>(another: T): T {
     return NDArray.zeros(another.shape) as T;
@@ -232,8 +234,8 @@ export class NDArray {
     if (this.data.values == null) {
       throwIfGPUNotInitialized();
       this.data.values = GPGPU.downloadMatrixFromTexture(
-          this.data.texture!, this.data.textureShapeRC![0],
-          this.data.textureShapeRC![1]);
+          this.data.texture, this.data.textureShapeRC[0],
+          this.data.textureShapeRC[1]);
       this.disposeTexture();
     }
     return this.data.values;
@@ -248,28 +250,28 @@ export class NDArray {
 
     GPGPU.uploadMatrixToTexture(
         this.data.texture, this.data.textureShapeRC[0],
-        this.data.textureShapeRC[1], this.data.values!);
+        this.data.textureShapeRC[1], this.data.values);
 
-    this.data.values = null!;
+    this.data.values = null;
   }
 
   getTexture(preferredShapeRC?: [number, number]): WebGLTexture {
     if (this.data.texture == null) {
       this.uploadToGPU(preferredShapeRC);
     }
-    return this.data.texture!;
+    return this.data.texture;
   }
 
   getTextureShapeRC(preferredShapeRC?: [number, number]): [number, number] {
     if (this.data.textureShapeRC == null) {
       this.uploadToGPU(preferredShapeRC);
     }
-    return this.data.textureShapeRC!;
+    return this.data.textureShapeRC;
   }
 
   dispose(): void {
-    this.data.values = null!;
-    this.shape = null!;
+    this.data.values = null;
+    this.shape = null;
     if (this.data.texture != null) {
       this.disposeTexture();
     }
@@ -277,10 +279,9 @@ export class NDArray {
 
   private disposeTexture() {
     throwIfGPUNotInitialized();
-    TEXTURE_MANAGER.releaseTexture(
-        this.data.texture!, this.data.textureShapeRC!);
-    this.data.texture = null!;
-    this.data.textureShapeRC = null!;
+    TEXTURE_MANAGER.releaseTexture(this.data.texture, this.data.textureShapeRC);
+    this.data.texture = null;
+    this.data.textureShapeRC = null;
   }
 
   inGPU(): boolean {
@@ -353,7 +354,7 @@ export class Array1D extends NDArray {
   constructor(data: NDArrayData) {
     const shape = (data.values != null) ?
         [data.values.length] :
-        [util.sizeFromShape(data.textureShapeRC!)];
+        [util.sizeFromShape(data.textureShapeRC)];
     super(shape, data);
   }
 
@@ -389,7 +390,7 @@ export class Array1D extends NDArray {
   }
 
   static zeros(shape: [number]): Array1D {
-    return NDArray.zeros<Array1D>(shape);
+    return NDArray.zeros(shape) as Array1D;
   }
 }
 
@@ -440,7 +441,7 @@ export class Array2D extends NDArray {
   }
 
   static zeros(shape: [number, number]): Array2D {
-    return NDArray.zeros<Array2D>(shape);
+    return NDArray.zeros(shape) as Array2D;
   }
 }
 
@@ -495,7 +496,7 @@ export class Array3D extends NDArray {
   }
 
   static zeros(shape: [number, number, number]): Array3D {
-    return NDArray.zeros<Array3D>(shape);
+    return NDArray.zeros(shape) as Array3D;
   }
 }
 
@@ -558,7 +559,7 @@ export class Array4D extends NDArray {
   }
 
   static zeros(shape: [number, number, number, number]): Array4D {
-    return NDArray.zeros<Array4D>(shape);
+    return NDArray.zeros(shape) as Array4D;
   }
 }
 
